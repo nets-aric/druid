@@ -32,7 +32,7 @@ jobs:
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         ECR_REPOSITORY: nets-analytics-druid
-        IMAGE_TAG: latest
+        tag_with_ref: true
       run: |
         # Build a docker container and push it to ECR 
         docker build -f distribution/docker/Dockerfile -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
