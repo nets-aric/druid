@@ -55,6 +55,26 @@ export interface NamespaceParseSpec {
   readonly listDelimiter?: string;
 }
 
+export interface AricLookup {
+  type?: string;
+  dataFetcher?: {
+    type: string;
+    fetchUri: string;
+    accessToken: string;
+    responseTimeout: number;
+  };
+  loadingCacheSpec?: {
+    type: string;
+    maximumSize: number;
+    expireAfterAccess: number;
+  };
+  reverseLoadingCacheSpec?: {
+    type: string;
+    maximumSize: number;
+    expireAfterAccess: number;
+  };
+}
+
 export interface LookupSpec {
   readonly type: string;
   readonly map?: Record<string, string | number>;
@@ -83,7 +103,7 @@ export const LOOKUP_FIELDS: Field<LookupSpec>[] = [
   {
     name: 'type',
     type: 'string',
-    suggestions: ['map', 'cachedNamespace'],
+    suggestions: ['map', 'cachedNamespace', 'aricLookup'],
     required: true,
     adjustment: l => {
       if (l.type === 'map' && !l.map) {
@@ -114,6 +134,104 @@ export const LOOKUP_FIELDS: Field<LookupSpec>[] = [
       }
       return;
     },
+  },
+
+  // API Lookup options
+  {
+    name: 'dataFetcher.type',
+    label: 'Data Fetcher Type',
+    type: 'string',
+    placeholder: 'apiDataFetcher',
+    defined: (model: LookupSpec) => model.type === 'aricLookup',
+    required: false,
+  },
+
+  {
+    name: 'dataFetcher.fetchUri',
+    label: 'Fetch URI',
+    type: 'string',
+    placeholder: 'http://host:port/some/request',
+    defined: (model: LookupSpec) => model.type === 'aricLookup',
+    required: false,
+  },
+
+  {
+    name: 'dataFetcher.accessToken',
+    label: 'Valid Access Token',
+    type: 'string',
+    placeholder: 'someAccessToken',
+    defined: (model: LookupSpec) => model.type === 'aricLookup',
+    required: false,
+  },
+
+  {
+    name: 'dataFetcher.responseTimeout',
+    label: 'Response Timeout Period',
+    type: 'number',
+    placeholder: '5000',
+    defined: (model: LookupSpec) => model.type === 'aricLookup',
+    required: false,
+  },
+
+  {
+    name: 'loadingCacheSpec.type',
+    label: 'Loading Cache Spec Type',
+    type: 'string',
+    placeholder: 'Valid Type',
+    defined: (model: LookupSpec) => model.type === 'aricLookup',
+    required: false,
+  },
+
+  {
+    name: 'loadingCacheSpec.maximumSize',
+    label: 'Loading Cache Spec Maximum Size',
+    type: 'number',
+    placeholder: '0',
+    defined: (model: LookupSpec) => model.type === 'aricLookup',
+    required: false,
+  },
+
+  {
+    name: 'loadingCacheSpec.expireAfterAccess',
+    label: 'Time until access is expired',
+    type: 'number',
+    placeholder: '0',
+    defined: (model: LookupSpec) => model.type === 'aricLookup',
+    required: false,
+  },
+
+  {
+    name: 'reverseLoadingCacheSpec.type',
+    label: 'Reverse Loading Cache Spec Type',
+    type: 'string',
+    placeholder: 'Valid Type',
+    defined: (model: LookupSpec) => model.type === 'aricLookup',
+    required: false,
+  },
+
+  {
+    name: 'reverseLoadingCacheSpec.maximumSize',
+    label: 'Reverse Loading Cache Spec Maximum Size',
+    type: 'number',
+    placeholder: '0',
+    defined: (model: LookupSpec) => model.type === 'aricLookup',
+    required: false,
+  },
+
+  {
+    name: 'reverseLoadingCacheSpec.expireAfterAccess',
+    label: 'Time until access is expired',
+    type: 'number',
+    placeholder: '0',
+    defined: (model: LookupSpec) => model.type === 'aricLookup',
+    required: false,
+  },
+  {
+    name: 'injective',
+    type: 'boolean',
+    defaultValue: false,
+    defined: (model: LookupSpec) => model.type === 'aricLookup',
+    info: `If the underlying map is injective (keys and values are unique) then optimizations can occur internally by setting this to true`,
   },
 
   // cachedNamespace lookups have more options
