@@ -42,6 +42,7 @@ public class LookupExtractionModule implements DruidModule
           {
             context.registerSubtypes(LoadingLookupFactory.class);
             context.registerSubtypes(PollingLookupFactory.class);
+            context.registerSubtypes(AricLookupFactory.class);
           }
         }
     );
