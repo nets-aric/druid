@@ -73,7 +73,7 @@ export interface AricLookup {
     type: string;
     maximumSize: number;
     expireAfterAccess: number;
-  }
+  };
 }
 
 export interface LookupSpec {
@@ -122,105 +122,95 @@ export const LOOKUP_FIELDS: Field<LookupSpec>[] = [
     },
   },
 
-    // API Lookup
-  {
-    name: 'aricLookup',
-    type: 'json',
-    height: '60vh',
-    defined: (model: LookupSpec) => model.type === 'aricLookup',
-    required: true,
-  },
-
   // API Lookup options
-
   {
-    name: 'aricLookup.dataFetcher.type',
-    label: 'dataFetcher type',
+    name: 'dataFetcher.type',
+    label: 'Data Fetcher Type',
     type: 'string',
     placeholder: 'apiDataFetcher',
     defined: (model: LookupSpec) => model.type === 'aricLookup',
-    required: true,
+    required: false,
   },
 
   {
-    name: 'aricLookup.dataFetcher.fetchUri',
+    name: 'dataFetcher.fetchUri',
     label: 'Fetch URI',
     type: 'string',
     placeholder: 'http://host:port/some/request',
     defined: (model: LookupSpec) => model.type === 'aricLookup',
-    required: true,
+    required: false,
   },
 
   {
-    name: 'aricLookup.dataFetcher.accessToken',
+    name: 'dataFetcher.accessToken',
     label: 'Valid Access Token',
     type: 'string',
     placeholder: 'someAccessToken',
     defined: (model: LookupSpec) => model.type === 'aricLookup',
-    required: true,
+    required: false,
   },
 
   {
-    name: 'aricLookup.dataFetcher.responseTimeout',
+    name: 'dataFetcher.responseTimeout',
     label: 'Response Timeout Period',
     type: 'number',
     placeholder: '5000',
     defined: (model: LookupSpec) => model.type === 'aricLookup',
-    required: true,
+    required: false,
   },
 
   {
-    name: 'aricLookup.loadingCacheSpec.type',
+    name: 'loadingCacheSpec.type',
     label: 'Loading Cache Spec Type',
     type: 'string',
     placeholder: 'Valid Type',
     defined: (model: LookupSpec) => model.type === 'aricLookup',
-    required: true,
+    required: false,
   },
 
   {
-    name: 'aricLookup.loadingCacheSpec.maximumSize',
+    name: 'loadingCacheSpec.maximumSize',
     label: 'Loading Cache Spec Maximum Size',
     type: 'number',
     placeholder: '0',
     defined: (model: LookupSpec) => model.type === 'aricLookup',
-    required: true,
+    required: false,
   },
 
   {
-    name: 'aricLookup.loadingCacheSpec.expireAfterAccess',
+    name: 'loadingCacheSpec.expireAfterAccess',
     label: 'Time until access is expired',
     type: 'number',
     placeholder: '0',
     defined: (model: LookupSpec) => model.type === 'aricLookup',
-    required: true,
+    required: false,
   },
 
   {
-    name: 'aricLookup.reverseLoadingCacheSpec.type',
+    name: 'reverseLoadingCacheSpec.type',
     label: 'Reverse Loading Cache Spec Type',
     type: 'string',
     placeholder: 'Valid Type',
     defined: (model: LookupSpec) => model.type === 'aricLookup',
-    required: true,
+    required: false,
   },
 
   {
-    name: 'aricLookup.reverseLoadingCacheSpec.maximumSize',
+    name: 'reverseLoadingCacheSpec.maximumSize',
     label: 'Reverse Loading Cache Spec Maximum Size',
     type: 'number',
     placeholder: '0',
     defined: (model: LookupSpec) => model.type === 'aricLookup',
-    required: true,
+    required: false,
   },
 
   {
-    name: 'aricLookup.reverseLoadingCacheSpec.expireAfterAccess',
+    name: 'reverseLoadingCacheSpec.expireAfterAccess',
     label: 'Time until access is expired',
     type: 'number',
     placeholder: '0',
     defined: (model: LookupSpec) => model.type === 'aricLookup',
-    required: true,
+    required: false,
   },
   {
     name: 'injective',
