@@ -142,7 +142,7 @@ export const LOOKUP_FIELDS: Field<LookupSpec>[] = [
     label: 'Data Fetcher Type',
     type: 'string',
     placeholder: 'apiDataFetcher',
-    defined: (model: LookupSpec) => model.type === 'aricLookup',
+    defined: typeIs('aricLookup'),
     required: false,
   },
 
@@ -151,7 +151,7 @@ export const LOOKUP_FIELDS: Field<LookupSpec>[] = [
     label: 'Fetch URI',
     type: 'string',
     placeholder: 'http://host:port/some/request',
-    defined: (model: LookupSpec) => model.type === 'aricLookup',
+    defined: typeIs('aricLookup'),
     required: false,
   },
 
@@ -160,7 +160,7 @@ export const LOOKUP_FIELDS: Field<LookupSpec>[] = [
     label: 'Valid Access Token',
     type: 'string',
     placeholder: 'someAccessToken',
-    defined: (model: LookupSpec) => model.type === 'aricLookup',
+    defined: typeIs('aricLookup'),
     required: false,
   },
 
@@ -169,7 +169,7 @@ export const LOOKUP_FIELDS: Field<LookupSpec>[] = [
     label: 'Response Timeout Period',
     type: 'number',
     placeholder: '5000',
-    defined: (model: LookupSpec) => model.type === 'aricLookup',
+    defined: typeIs('aricLookup'),
     required: false,
   },
 
@@ -178,7 +178,7 @@ export const LOOKUP_FIELDS: Field<LookupSpec>[] = [
     label: 'Loading Cache Spec Type',
     type: 'string',
     placeholder: 'Valid Type',
-    defined: (model: LookupSpec) => model.type === 'aricLookup',
+    defined: typeIs('aricLookup'),
     required: false,
   },
 
@@ -187,7 +187,7 @@ export const LOOKUP_FIELDS: Field<LookupSpec>[] = [
     label: 'Loading Cache Spec Maximum Size',
     type: 'number',
     placeholder: '0',
-    defined: (model: LookupSpec) => model.type === 'aricLookup',
+    defined: typeIs('aricLookup'),
     required: false,
   },
 
@@ -196,7 +196,7 @@ export const LOOKUP_FIELDS: Field<LookupSpec>[] = [
     label: 'Time until access is expired',
     type: 'number',
     placeholder: '0',
-    defined: (model: LookupSpec) => model.type === 'aricLookup',
+    defined: typeIs('aricLookup'),
     required: false,
   },
 
@@ -205,7 +205,7 @@ export const LOOKUP_FIELDS: Field<LookupSpec>[] = [
     label: 'Reverse Loading Cache Spec Type',
     type: 'string',
     placeholder: 'Valid Type',
-    defined: (model: LookupSpec) => model.type === 'aricLookup',
+    defined: typeIs('aricLookup'),
     required: false,
   },
 
@@ -214,7 +214,7 @@ export const LOOKUP_FIELDS: Field<LookupSpec>[] = [
     label: 'Reverse Loading Cache Spec Maximum Size',
     type: 'number',
     placeholder: '0',
-    defined: (model: LookupSpec) => model.type === 'aricLookup',
+    defined: typeIs('aricLookup'),
     required: false,
   },
 
@@ -223,14 +223,14 @@ export const LOOKUP_FIELDS: Field<LookupSpec>[] = [
     label: 'Time until access is expired',
     type: 'number',
     placeholder: '0',
-    defined: (model: LookupSpec) => model.type === 'aricLookup',
+    defined: typeIs('aricLookup'),
     required: false,
   },
   {
     name: 'injective',
     type: 'boolean',
     defaultValue: false,
-    defined: (model: LookupSpec) => model.type === 'aricLookup',
+    defined: typeIs('aricLookup'),
     info: `If the underlying map is injective (keys and values are unique) then optimizations can occur internally by setting this to true`,
   },
 
