@@ -183,6 +183,10 @@ public class DruidLeaderClient
         }
       }
 
+      if (HttpResponseStatus.GATEWAY_TIMEOUT.equals(fullResponseHolder.getResponse().getStatus())) {
+          throw new IOE("Gateway Timeout Occured [%s].", request.getUrl());
+      }
+
       if (HttpResponseStatus.TEMPORARY_REDIRECT.equals(fullResponseHolder.getResponse().getStatus())) {
         String redirectUrlStr = fullResponseHolder.getResponse().headers().get("Location");
         if (redirectUrlStr == null) {
