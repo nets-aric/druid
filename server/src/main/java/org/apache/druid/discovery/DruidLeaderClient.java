@@ -141,6 +141,10 @@ public class DruidLeaderClient
       try {
         try {
           fullResponseHolder = httpClient.go(request, responseHandler).get();
+
+          if (HttpResponseStatus.GATEWAY_TIMEOUT.equals(fullResponseHolder.getResponse().getStatus())) {
+              throw new IOE("Gateway Timeout Occured [%s].", request.getUrl());
+          }
         }
         catch (ExecutionException e) {
           // Unwrap IOExceptions and ChannelExceptions, re-throw others
@@ -181,10 +185,6 @@ public class DruidLeaderClient
               request.getUrl().getQuery()
           );
         }
-      }
-
-      if (HttpResponseStatus.GATEWAY_TIMEOUT.equals(fullResponseHolder.getResponse().getStatus())) {
-          throw new IOE("Gateway Timeout Occured [%s].", request.getUrl());
       }
 
       if (HttpResponseStatus.TEMPORARY_REDIRECT.equals(fullResponseHolder.getResponse().getStatus())) {
