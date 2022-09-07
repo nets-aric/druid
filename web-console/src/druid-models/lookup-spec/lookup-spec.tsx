@@ -76,6 +76,42 @@ export interface AricLookup {
   };
 }
 
+export interface LoadingLookup {
+  type?: string;
+  dataFetcher?: {
+    type: string;
+    connectorConfig: string;
+    table: string;
+    keyColumn: number;
+    valueColumn: number;
+  };
+  loadingCacheSpec?: {
+    type: string;
+    maximumSize: number;
+    expireAfterAccess: number;
+  };
+  reverseLoadingCacheSpec?: {
+    type: string;
+    maximumSize: number;
+    expireAfterAccess: number;
+  };
+}
+
+export interface PollingLookup {
+  type?: string;
+  dataFetcher?: {
+    type: string;
+    connectorConfig: string;
+    table: string;
+    keyColumn: number;
+    valueColumn: number;
+  };
+  cacheFactory?: {
+    type: string;
+  };
+  pollPeriodMs?: string
+}
+
 export interface LookupSpec {
   readonly type: string;
 
@@ -85,6 +121,8 @@ export interface LookupSpec {
   // type: cachedNamespace
   readonly extractionNamespace?: ExtractionNamespaceSpec;
   readonly aricLookup?: AricLookup;
+  readonly loadingLookup?: LoadingLookup
+  readonly pollingLookup?: PollingLookup
   readonly firstCacheTimeout?: number;
   readonly injective?: boolean;
 
@@ -115,7 +153,7 @@ export const LOOKUP_FIELDS: Field<LookupSpec>[] = [
   {
     name: 'type',
     type: 'string',
-    suggestions: ['map', 'cachedNamespace', 'aricLookup', 'kafka'],
+    suggestions: ['map', 'cachedNamespace', 'aricLookup', 'kafka', 'loadingLookup', 'pollingLookup'],
     required: true,
     adjustment: l => {
       if (l.type === 'map' && !l.map) {
@@ -149,6 +187,170 @@ export const LOOKUP_FIELDS: Field<LookupSpec>[] = [
       }
       return;
     },
+  },
+
+  // pollingLookup options
+  {
+    name: 'dataFetcher.type',
+    label: 'Data Fetcher Type',
+    type: 'string',
+    placeholder: 'apiDataFetcher',
+    defined: typeIs('pollingLookup'),
+    required: false,
+  },
+
+  {
+    name: 'dataFetcher.connectorConfig',
+    label: 'Connection URI',
+    type: 'string',
+    placeholder: 'jdbc://mysql://<HOST>:<PORT>/my_data_base',
+    defined: typeIs('pollingLookup'),
+    required: false,
+  },
+
+  {
+    name: 'dataFetcher.table',
+    label: 'Lookup table',
+    type: 'string',
+    placeholder: 'lookupTable',
+    defined: typeIs('pollingLookup'),
+    required: false,
+  },
+
+  {
+    name: 'dataFetcher.keyColumn',
+    label: 'Key column name',
+    type: 'string',
+    placeholder: 'keyColumn',
+    defined: typeIs('pollingLookup'),
+    required: false,
+  },
+
+  {
+    name: 'dataFetcher.valueColumn',
+    label: 'Value column name',
+    type: 'string',
+    placeholder: 'valueColumn',
+    defined: typeIs('pollingLookup'),
+    required: false,
+  },
+
+  {
+    name: 'cacheFactory.type',
+    label: 'cacheFactory type',
+    type: 'string',
+    placeholder: 'onHeapPolling/offHeapPolling',
+    defined: typeIs('pollingLookup'),
+    required: false,
+  },
+
+  {
+    name: 'pollPeriodMs',
+    label: 'pollPeriodMs',
+    type: 'string',
+    placeholder: 'PT10M',
+    defined: typeIs('pollingLookup'),
+    required: false,
+  },
+
+  // loadingLookup options
+  {
+    name: 'dataFetcher.type',
+    label: 'Data Fetcher Type',
+    type: 'string',
+    placeholder: 'apiDataFetcher',
+    defined: typeIs('loadingLookup'),
+    required: false,
+  },
+
+  {
+    name: 'dataFetcher.connectorConfig',
+    label: 'Connection URI',
+    type: 'string',
+    placeholder: 'jdbc://mysql://<HOST>:<PORT>/my_data_base',
+    defined: typeIs('loadingLookup'),
+    required: false,
+  },
+
+  {
+    name: 'dataFetcher.table',
+    label: 'Lookup table',
+    type: 'string',
+    placeholder: 'lookupTable',
+    defined: typeIs('loadingLookup'),
+    required: false,
+  },
+
+  {
+    name: 'dataFetcher.keyColumn',
+    label: 'Key column name',
+    type: 'string',
+    placeholder: 'keyColumn',
+    defined: typeIs('loadingLookup'),
+    required: false,
+  },
+
+  {
+    name: 'dataFetcher.valueColumn',
+    label: 'Value column name',
+    type: 'string',
+    placeholder: 'valueColumn',
+    defined: typeIs('loadingLookup'),
+    required: false,
+  },
+
+  {
+    name: 'loadingCacheSpec.type',
+    label: 'Loading Cache Spec Type',
+    type: 'string',
+    placeholder: 'Valid Type',
+    defined: typeIs('loadingLookup'),
+    required: false,
+  },
+
+  {
+    name: 'loadingCacheSpec.maximumSize',
+    label: 'Loading Cache Spec Maximum Size',
+    type: 'number',
+    placeholder: '0',
+    defined: typeIs('loadingLookup'),
+    required: false,
+  },
+
+  {
+    name: 'loadingCacheSpec.expireAfterAccess',
+    label: 'Time until access is expired',
+    type: 'number',
+    placeholder: '0',
+    defined: typeIs('loadingLookup'),
+    required: false,
+  },
+
+  {
+    name: 'reverseLoadingCacheSpec.type',
+    label: 'Reverse Loading Cache Spec Type',
+    type: 'string',
+    placeholder: 'Valid Type',
+    defined: typeIs('loadingLookup'),
+    required: false,
+  },
+
+  {
+    name: 'reverseLoadingCacheSpec.maximumSize',
+    label: 'Reverse Loading Cache Spec Maximum Size',
+    type: 'number',
+    placeholder: '0',
+    defined: typeIs('loadingLookup'),
+    required: false,
+  },
+
+  {
+    name: 'reverseLoadingCacheSpec.expireAfterAccess',
+    label: 'Time until access is expired',
+    type: 'number',
+    placeholder: '0',
+    defined: typeIs('loadingLookup'),
+    required: false,
   },
 
   // API Lookup options
