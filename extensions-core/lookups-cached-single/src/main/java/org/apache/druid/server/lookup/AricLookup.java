@@ -21,13 +21,13 @@ package org.apache.druid.server.lookup;
 
 
 import com.google.common.base.Preconditions;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+
+import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 import org.apache.druid.common.config.NullHandling;
 import org.apache.druid.java.util.common.logger.Logger;
@@ -82,6 +82,37 @@ public class AricLookup extends LookupExtractor
       LOGGER.debug("value not found for key [%s]", key);
       return null;
     }
+  }
+
+  @Override
+  public Map<String, String> applyAll(Iterable<String> keys)
+  {
+    if (keys == null) {
+      return Collections.emptyMap();
+    }
+
+    Map<String, String> totalResults = new HashMap<>();
+
+    // Chunk List to batch process
+    List<String> list = new ArrayList<>();
+    keys.forEach(list::add);
+    AtomicInteger counter = new AtomicInteger();
+    int chunkSize = 10000;
+    list.stream().collect(Collectors.groupingBy(it2 -> counter.getAndIncrement() / chunkSize)).forEach((count, keysBatch) -> {
+      try {
+        keysBatch.removeAll(totalResults.keySet());
+        Map<String, String> valuesBatch = dataFetcher.fetchBatch(keysBatch);
+
+        if (valuesBatch != null) {
+          totalResults.putAll(valuesBatch);
+        }
+
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    });
+
+    return totalResults;
   }
 
   @Override

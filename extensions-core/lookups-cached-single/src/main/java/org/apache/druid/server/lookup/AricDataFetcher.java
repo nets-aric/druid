@@ -23,6 +23,7 @@ package org.apache.druid.server.lookup;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import java.util.List;
+import java.util.Map;
 import javax.annotation.Nullable;
 import org.apache.druid.server.lookup.api.ApiDataFetcher;
 
@@ -58,6 +59,8 @@ public interface AricDataFetcher<K, V>
    * @return Returns null if the key doesn't have an associated value, or the value if it exists
    */
   @Nullable V fetch(K key);
+
+  @Nullable Map<K, V> fetchBatch(List<K> key);
 
   /**
    * Function used to perform a bulk lookup
