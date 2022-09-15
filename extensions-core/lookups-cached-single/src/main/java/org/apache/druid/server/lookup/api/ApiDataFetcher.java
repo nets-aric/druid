@@ -22,9 +22,13 @@ package org.apache.druid.server.lookup.api;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.base.Preconditions;
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import javax.annotation.Nullable;
+
+import org.json.*;
 import org.apache.druid.common.config.NullHandling;
 import org.apache.druid.java.util.common.StringUtils;
 import org.apache.druid.java.util.common.logger.Logger;
@@ -142,6 +146,48 @@ public class ApiDataFetcher implements AricDataFetcher<String, String> {
                 value));
       }
       return NullHandling.nullToEmptyIfNeeded(value);
+    } catch (Exception e) {
+      LOGGER.error(e, "Unable to fetch response");
+      throw new RuntimeException(e);
+    }
+  }
+
+  @Override
+  public Map<String, String> fetchBatch(final List<String> keysBatch) {
+    try {
+      JSONObject tokens = new JSONObject();
+      tokens.put("id", keysBatch);
+
+      HttpPost httpPost = new HttpPost(fetchUri);
+
+      httpPost.setHeader("Accept", "application/json");
+      httpPost.setHeader("Content-type", "application/json");
+      httpPost.addHeader("Access-Token", accessToken);
+
+      StringEntity body = new StringEntity(tokens.toString());
+      httpPost.setEntity(body);
+
+      CloseableHttpResponse response = httpclient.execute(httpPost);
+      HttpEntity entity = response.getEntity();
+      response.close();
+
+      String value = EntityUtils.toString(entity);
+
+      //A HTTP status code which is not 200 indicates a error has occured
+      if (response.getCode() != 200) {
+        throw new Exception(
+                StringUtils.format(
+                        "ApiDataFetcher received an incompatible HTTP Status Code: %d Response: %s",
+                        response.getCode(),
+                        value));
+      }
+      Map<String, String> batchResults = new HashMap<>();
+
+      JSONArray valuesBatch = new JSONArray(value);
+      for (int i = 0; i < valuesBatch.length(); i++) {
+        batchResults.put(keysBatch.get(i),valuesBatch.getString(i));
+      }
+      return batchResults;
     } catch (Exception e) {
       LOGGER.error(e, "Unable to fetch response");
       throw new RuntimeException(e);
