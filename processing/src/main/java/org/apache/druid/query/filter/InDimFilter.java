@@ -461,12 +461,14 @@ public class InDimFilter extends AbstractOptimizableDimFilter implements Filter
       LookupExtractor lookup = exFn.getLookup();
 
       final Set<String> keys = new HashSet<>();
-      for (String value : values) {
+      final Set<String> convertedValues = new HashSet<>();
+      values.forEach( (value) -> convertedValues.add(NullHandling.emptyToNullIfNeeded(value)));
+      final Map<String, String> appliedVals = lookup.applyAll(convertedValues);
+      for (String convertedValue : convertedValues) {
 
         // We cannot do an unapply()-based optimization if the selector value
         // and the replaceMissingValuesWith value are the same, since we have to match on
         // all values that are not present in the lookup.
-        final String convertedValue = NullHandling.emptyToNullIfNeeded(value);
         if (!exFn.isRetainMissingValue() && Objects.equals(convertedValue, exFn.getReplaceMissingValueWith())) {
           return this;
         }
@@ -476,7 +478,7 @@ public class InDimFilter extends AbstractOptimizableDimFilter implements Filter
         // there may be row values that match the selector value but are not included
         // in the lookup map. Match on the selector value as well.
         // If the selector value is overwritten in the lookup map, don't add selector value to keys.
-        if (exFn.isRetainMissingValue() && NullHandling.isNullOrEquivalent(lookup.apply(convertedValue))) {
+        if (exFn.isRetainMissingValue() && NullHandling.isNullOrEquivalent(appliedVals.get(convertedValue))) {
           keys.add(convertedValue);
         }
       }
