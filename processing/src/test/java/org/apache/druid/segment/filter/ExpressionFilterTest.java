@@ -36,14 +36,17 @@ import org.apache.druid.data.input.impl.TimeAndDimsParseSpec;
 import org.apache.druid.data.input.impl.TimestampSpec;
 import org.apache.druid.java.util.common.DateTimes;
 import org.apache.druid.java.util.common.Pair;
+import org.apache.druid.math.expr.ExpressionProcessing;
 import org.apache.druid.query.expression.TestExprMacroTable;
 import org.apache.druid.query.filter.ExpressionDimFilter;
 import org.apache.druid.query.filter.Filter;
 import org.apache.druid.segment.IndexBuilder;
 import org.apache.druid.segment.StorageAdapter;
 import org.apache.druid.segment.incremental.IncrementalIndexSchema;
+import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
@@ -71,9 +74,7 @@ public class ExpressionFilterTest extends BaseFilterTest
                   new FloatDimensionSchema("dim2"),
                   new StringDimensionSchema("dim3"),
                   new StringDimensionSchema("dim4")
-              ),
-              null,
-              null
+              )
           )
       )
   );
@@ -118,6 +119,18 @@ public class ExpressionFilterTest extends BaseFilterTest
   @Rule
   public ExpectedException expectedException = ExpectedException.none();
 
+  @Before
+  public void setup()
+  {
+    ExpressionProcessing.initializeForStrictBooleansTests(false);
+  }
+
+  @After
+  public void teardown()
+  {
+    ExpressionProcessing.initializeForTests();
+  }
+
   @AfterClass
   public static void tearDown() throws Exception
   {
@@ -149,6 +162,10 @@ public class ExpressionFilterTest extends BaseFilterTest
   @Test
   public void testOneMultiValuedStringColumn()
   {
+    // auto type columns don't support mvds, bail out
+    if (testName.contains("AutoTypes")) {
+      return;
+    }
     if (NullHandling.replaceWithDefault()) {
       assertFilterMatchesSkipVectorize(edf("dim4 == ''"), ImmutableList.of("1", "2", "6", "7", "8"));
     } else {
@@ -235,6 +252,10 @@ public class ExpressionFilterTest extends BaseFilterTest
       assertFilterMatches(edf("dim2 == dim3"), ImmutableList.of("2", "5", "8"));
     }
 
+    // auto type columns don't support mvds, bail out
+    if (testName.contains("AutoTypes")) {
+      return;
+    }
     // String vs. multi-value string
     assertFilterMatchesSkipVectorize(edf("dim0 == dim4"), ImmutableList.of("3", "4", "5"));
   }

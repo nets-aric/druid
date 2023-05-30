@@ -22,18 +22,19 @@ package org.apache.druid.indexing.common.task.batch.parallel;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Stopwatch;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
-import org.apache.commons.io.FileUtils;
 import org.apache.druid.indexer.TaskStatus;
 import org.apache.druid.indexing.common.TaskLock;
 import org.apache.druid.indexing.common.TaskToolbox;
 import org.apache.druid.indexing.common.actions.LockListAction;
 import org.apache.druid.indexing.common.actions.SurrogateAction;
 import org.apache.druid.indexing.common.actions.TaskActionClient;
-import org.apache.druid.indexing.common.task.ClientBasedTaskInfoProvider;
+import org.apache.druid.indexing.common.task.AbstractBatchIndexTask;
 import org.apache.druid.indexing.common.task.TaskResource;
+import org.apache.druid.java.util.common.FileUtils;
 import org.apache.druid.java.util.common.ISE;
 import org.apache.druid.java.util.common.Pair;
 import org.apache.druid.java.util.common.RetryUtils;
@@ -41,6 +42,7 @@ import org.apache.druid.java.util.common.StringUtils;
 import org.apache.druid.java.util.common.io.Closer;
 import org.apache.druid.java.util.common.logger.Logger;
 import org.apache.druid.query.aggregation.AggregatorFactory;
+import org.apache.druid.segment.BaseProgressIndicator;
 import org.apache.druid.segment.IndexIO;
 import org.apache.druid.segment.IndexMerger;
 import org.apache.druid.segment.IndexMergerV9;
@@ -176,17 +178,15 @@ abstract class PartialSegmentMergeTask<S extends ShardSpec> extends PerfectRollu
     fetchStopwatch.stop();
     LOG.info("Fetch took [%s] seconds", fetchTime);
 
-    final ParallelIndexSupervisorTaskClient taskClient = toolbox.getSupervisorTaskClientFactory().build(
-        new ClientBasedTaskInfoProvider(toolbox.getIndexingServiceClient()),
-        getId(),
-        1, // always use a single http thread
+    final ParallelIndexSupervisorTaskClient taskClient = toolbox.getSupervisorTaskClientProvider().build(
+        supervisorTaskId,
         getTuningConfig().getChatHandlerTimeout(),
         getTuningConfig().getChatHandlerNumRetries()
     );
 
     final File persistDir = toolbox.getPersistDir();
-    FileUtils.deleteQuietly(persistDir);
-    FileUtils.forceMkdir(persistDir);
+    org.apache.commons.io.FileUtils.deleteQuietly(persistDir);
+    FileUtils.mkdirp(persistDir);
 
     final Set<DataSegment> pushedSegments = mergeAndPushSegments(
         toolbox,
@@ -197,7 +197,7 @@ abstract class PartialSegmentMergeTask<S extends ShardSpec> extends PerfectRollu
         intervalToUnzippedFiles
     );
 
-    taskClient.report(supervisorTaskId, new PushedSegmentsReport(getId(), Collections.emptySet(), pushedSegments));
+    taskClient.report(new PushedSegmentsReport(getId(), Collections.emptySet(), pushedSegments, ImmutableMap.of()));
 
     return TaskStatus.success(getId());
   }
@@ -208,8 +208,8 @@ abstract class PartialSegmentMergeTask<S extends ShardSpec> extends PerfectRollu
   ) throws IOException
   {
     final File tempDir = toolbox.getIndexingTmpDir();
-    FileUtils.deleteQuietly(tempDir);
-    FileUtils.forceMkdir(tempDir);
+    org.apache.commons.io.FileUtils.deleteQuietly(tempDir);
+    FileUtils.mkdirp(tempDir);
 
     final Map<Interval, Int2ObjectMap<List<File>>> intervalToUnzippedFiles = new HashMap<>();
     // Fetch partition files
@@ -217,13 +217,13 @@ abstract class PartialSegmentMergeTask<S extends ShardSpec> extends PerfectRollu
       final Interval interval = entryPerInterval.getKey();
       for (Int2ObjectMap.Entry<List<PartitionLocation>> entryPerBucketId : entryPerInterval.getValue().int2ObjectEntrySet()) {
         final int bucketId = entryPerBucketId.getIntKey();
-        final File partitionDir = FileUtils.getFile(
+        final File partitionDir = org.apache.commons.io.FileUtils.getFile(
             tempDir,
             interval.getStart().toString(),
             interval.getEnd().toString(),
             Integer.toString(bucketId)
         );
-        FileUtils.forceMkdir(partitionDir);
+        FileUtils.mkdirp(partitionDir);
         for (PartitionLocation location : entryPerBucketId.getValue()) {
           final File unzippedDir = toolbox.getShuffleClient().fetchSegmentFile(partitionDir, supervisorTaskId, location);
           intervalToUnzippedFiles.computeIfAbsent(interval, k -> new Int2ObjectOpenHashMap<>())
@@ -254,6 +254,7 @@ abstract class PartialSegmentMergeTask<S extends ShardSpec> extends PerfectRollu
     for (Entry<Interval, Int2ObjectMap<List<File>>> entryPerInterval : intervalToUnzippedFiles.entrySet()) {
       final Interval interval = entryPerInterval.getKey();
       for (Int2ObjectMap.Entry<List<File>> entryPerBucketId : entryPerInterval.getValue().int2ObjectEntrySet()) {
+        long startTime = System.nanoTime();
         final int bucketId = entryPerBucketId.getIntKey();
         final List<File> segmentFilesToMerge = entryPerBucketId.getValue();
         final Pair<File, List<String>> mergedFileAndDimensionNames = mergeSegmentsInSamePartition(
@@ -265,6 +266,12 @@ abstract class PartialSegmentMergeTask<S extends ShardSpec> extends PerfectRollu
             tuningConfig.getMaxNumSegmentsToMerge(),
             persistDir,
             0
+        );
+        long mergeFinishTime = System.nanoTime();
+        LOG.info("Merged [%d] input segment(s) for interval [%s] in [%,d]ms.",
+                 segmentFilesToMerge.size(),
+                 interval,
+                 (mergeFinishTime - startTime) / 1000000
         );
         final List<String> metricNames = Arrays.stream(dataSchema.getAggregators())
                                                .map(AggregatorFactory::getName)
@@ -278,7 +285,7 @@ abstract class PartialSegmentMergeTask<S extends ShardSpec> extends PerfectRollu
                     getDataSource(),
                     interval,
                     Preconditions.checkNotNull(
-                        ParallelIndexSupervisorTask.findVersion(intervalToVersion, interval),
+                        AbstractBatchIndexTask.findVersion(intervalToVersion, interval),
                         "version for interval[%s]",
                         interval
                     ),
@@ -294,7 +301,18 @@ abstract class PartialSegmentMergeTask<S extends ShardSpec> extends PerfectRollu
             exception -> !(exception instanceof NullPointerException) && exception instanceof Exception,
             5
         );
+        long pushFinishTime = System.nanoTime();
         pushedSegments.add(segment);
+        LOG.info("Built segment [%s] for interval [%s] (from [%d] input segment(s) in [%,d]ms) of "
+            + "size [%d] bytes and pushed ([%,d]ms) to deep storage [%s].",
+            segment.getId(),
+            interval,
+            segmentFilesToMerge.size(),
+            (mergeFinishTime - startTime) / 1000000,
+            segment.getSize(),
+            (pushFinishTime - mergeFinishTime) / 1000000,
+            segment.getLoadSpec()
+        );
       }
     }
     return pushedSegments;
@@ -335,8 +353,11 @@ abstract class PartialSegmentMergeTask<S extends ShardSpec> extends PerfectRollu
               indexesToMerge,
               dataSchema.getGranularitySpec().isRollup(),
               dataSchema.getAggregators(),
+              dataSchema.getDimensionsSpec(),
               outDir,
               tuningConfig.getIndexSpec(),
+              tuningConfig.getIndexSpecForIntermediatePersists(),
+              new BaseProgressIndicator(),
               tuningConfig.getSegmentWriteOutMediumFactory(),
               tuningConfig.getMaxColumnsToMerge()
           )

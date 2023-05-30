@@ -28,29 +28,11 @@
   <parent>
     <groupId>org.apache.druid</groupId>
     <artifactId>druid</artifactId>
-    <version>0.22.1</version>
+    <version>26.0.0</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
 
   <dependencies>
-    <dependency>
-      <groupId>org.apache.httpcomponents.client5</groupId>
-      <artifactId>httpclient5</artifactId>
-      <version>5.0.1</version>
-      <scope>provided</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.httpcomponents.core5</groupId>
-      <artifactId>httpcore5</artifactId>
-      <version>5.0.1</version>
-      <scope>provided</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.druid</groupId>
-      <artifactId>druid-core</artifactId>
-      <version>${project.parent.version}</version>
-      <scope>provided</scope>
-    </dependency>
     <dependency>
       <groupId>org.apache.druid</groupId>
       <artifactId>druid-processing</artifactId>
@@ -108,11 +90,6 @@
       <artifactId>guava</artifactId>
       <scope>provided</scope>
     </dependency>
-    <dependency>
-      <groupId>org.postgresql</groupId>
-      <artifactId>postgresql</artifactId>
-      <scope>provided</scope>
-    </dependency>
 
     <!-- Tests -->
     <dependency>
@@ -122,7 +99,7 @@
     </dependency>
     <dependency>
       <groupId>org.apache.druid</groupId>
-      <artifactId>druid-core</artifactId>
+      <artifactId>druid-processing</artifactId>
       <version>${project.parent.version}</version>
       <type>test-jar</type>
       <scope>test</scope>
@@ -140,16 +117,15 @@
       <scope>test</scope>
     </dependency>
     <dependency>
-      <groupId>org.apache.druid</groupId>
-      <artifactId>druid-processing</artifactId>
-      <version>${project.parent.version}</version>
-      <type>test-jar</type>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
       <groupId>mysql</groupId>
       <artifactId>mysql-connector-java</artifactId>
       <version>${mysql.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+      <version>${postgresql.version}</version>
       <scope>test</scope>
     </dependency>
   </dependencies>

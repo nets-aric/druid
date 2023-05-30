@@ -141,18 +141,6 @@ public class DruidLeaderClient
       try {
         try {
           fullResponseHolder = httpClient.go(request, responseHandler).get();
-
-          // Handle Linkerd Response Codes. Throw IOException when the leader cannot be contacted.
-          int httpResponseCode = fullResponseHolder.getResponse().getStatus().getCode();
-
-          switch (httpResponseCode) {
-            case 502:
-              throw new IOE("Bad Gateway [%s].", request.getUrl());
-            case 503:
-              throw new IOE("Service Unavailable [%s].", request.getUrl());
-            case 504:
-              throw new IOE("Gateway Timeout Occured [%s].", request.getUrl());
-          }
         }
         catch (ExecutionException e) {
           // Unwrap IOExceptions and ChannelExceptions, re-throw others
