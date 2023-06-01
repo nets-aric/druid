@@ -33,7 +33,7 @@ jobs:
         IMAGE_TAG: nets-druid-${{ github.event.release.tag_name }}
       run: |
         # Build a docker container and push it to ECR 
-        docker build -f distribution/docker/Dockerfile -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        DOCKER_BUILDKIT=1 docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f distribution/docker/Dockerfile .
         echo "Pushing image to ECR..."
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
         echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"

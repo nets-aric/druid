@@ -16,11 +16,11 @@
  * limitations under the License.
  */
 
-import { AxisScale } from 'd3-axis';
+import type { AxisScale } from 'd3-axis';
 import React from 'react';
 
 import { BarUnit } from './bar-unit';
-import { BarUnitData, HoveredBarInfo } from './stacked-bar-chart';
+import type { BarUnitData, HoveredBarInfo } from './stacked-bar-chart';
 
 interface BarGroupProps {
   dataToRender: BarUnitData[];
@@ -40,14 +40,8 @@ export class BarGroup extends React.Component<BarGroupProps> {
   }
 
   render(): JSX.Element[] | null {
-    const {
-      dataToRender,
-      changeActiveDatasource,
-      xScale,
-      yScale,
-      onHoverBar,
-      barWidth,
-    } = this.props;
+    const { dataToRender, changeActiveDatasource, xScale, yScale, onHoverBar, barWidth } =
+      this.props;
     if (dataToRender === undefined) return null;
 
     return dataToRender.map((entry: BarUnitData, i: number) => {
@@ -62,6 +56,7 @@ export class BarGroup extends React.Component<BarGroupProps> {
         datasource: entry.datasource,
         xValue: entry.x,
         yValue: entry.y,
+        dailySize: entry.dailySize,
       };
       return (
         <BarUnit

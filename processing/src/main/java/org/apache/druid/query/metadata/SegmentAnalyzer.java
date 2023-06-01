@@ -21,7 +21,6 @@ package org.apache.druid.query.metadata;
 
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.Iterables;
 import org.apache.druid.common.config.NullHandling;
 import org.apache.druid.java.util.common.StringUtils;
 import org.apache.druid.java.util.common.granularity.Granularities;
@@ -38,12 +37,16 @@ import org.apache.druid.segment.Segment;
 import org.apache.druid.segment.StorageAdapter;
 import org.apache.druid.segment.VirtualColumns;
 import org.apache.druid.segment.column.BaseColumn;
-import org.apache.druid.segment.column.BitmapIndex;
 import org.apache.druid.segment.column.ColumnCapabilities;
-import org.apache.druid.segment.column.ColumnCapabilitiesImpl;
 import org.apache.druid.segment.column.ColumnHolder;
+import org.apache.druid.segment.column.ColumnIndexSupplier;
+import org.apache.druid.segment.column.ColumnType;
+import org.apache.druid.segment.column.ColumnTypeFactory;
 import org.apache.druid.segment.column.ComplexColumn;
 import org.apache.druid.segment.column.DictionaryEncodedColumn;
+import org.apache.druid.segment.column.DictionaryEncodedStringValueIndex;
+import org.apache.druid.segment.column.RowSignature;
+import org.apache.druid.segment.column.TypeSignature;
 import org.apache.druid.segment.column.ValueType;
 import org.apache.druid.segment.data.IndexedInts;
 import org.apache.druid.segment.incremental.IncrementalIndexStorageAdapter;
@@ -55,10 +58,8 @@ import org.joda.time.Interval;
 import javax.annotation.Nullable;
 import java.io.IOException;
 import java.util.EnumSet;
-import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Set;
-import java.util.TreeMap;
 
 public class SegmentAnalyzer
 {
@@ -95,68 +96,72 @@ public class SegmentAnalyzer
     final StorageAdapter storageAdapter = segment.asStorageAdapter();
 
     // get length and column names from storageAdapter
-    final int length = storageAdapter.getNumRows();
-    final Set<String> columnNames = new HashSet<>();
-    Iterables.addAll(columnNames, storageAdapter.getAvailableDimensions());
-    Iterables.addAll(columnNames, storageAdapter.getAvailableMetrics());
+    final int numRows = storageAdapter.getNumRows();
 
-    Map<String, ColumnAnalysis> columns = new TreeMap<>();
+    // Use LinkedHashMap to preserve column order.
+    final Map<String, ColumnAnalysis> columns = new LinkedHashMap<>();
 
-    Function<String, ColumnCapabilities> adapterCapabilitesFn =
-        storageAdapter instanceof IncrementalIndexStorageAdapter
-        ? ((IncrementalIndexStorageAdapter) storageAdapter)::getSnapshotColumnCapabilities
-        : storageAdapter::getColumnCapabilities;
-
-    for (String columnName : columnNames) {
-      final ColumnHolder columnHolder = index == null ? null : index.getColumnHolder(columnName);
+    final RowSignature rowSignature = storageAdapter.getRowSignature();
+    for (String columnName : rowSignature.getColumnNames()) {
       final ColumnCapabilities capabilities;
-      if (columnHolder != null) {
-        capabilities = columnHolder.getCapabilities();
+
+      if (storageAdapter instanceof IncrementalIndexStorageAdapter) {
+        // See javadocs for getSnapshotColumnCapabilities for a discussion of why we need to do this.
+        capabilities = ((IncrementalIndexStorageAdapter) storageAdapter).getSnapshotColumnCapabilities(columnName);
       } else {
-        // this can be removed if we get to the point where IncrementalIndexStorageAdapter.getColumnCapabilities
-        // accurately reports the capabilities
-        capabilities = adapterCapabilitesFn.apply(columnName);
+        capabilities = storageAdapter.getColumnCapabilities(columnName);
       }
 
-      final ColumnAnalysis analysis;
-      final ValueType type = capabilities.getType();
-      switch (type) {
-        case LONG:
-          analysis = analyzeNumericColumn(capabilities, length, Long.BYTES);
-          break;
-        case FLOAT:
-          analysis = analyzeNumericColumn(capabilities, length, NUM_BYTES_IN_TEXT_FLOAT);
-          break;
-        case DOUBLE:
-          analysis = analyzeNumericColumn(capabilities, length, Double.BYTES);
-          break;
-        case STRING:
-          if (index != null) {
-            analysis = analyzeStringColumn(capabilities, columnHolder);
-          } else {
-            analysis = analyzeStringColumn(capabilities, storageAdapter, columnName);
-          }
-          break;
-        case COMPLEX:
-          analysis = analyzeComplexColumn(capabilities, columnHolder, storageAdapter.getColumnTypeName(columnName));
-          break;
-        default:
-          log.warn("Unknown column type[%s].", type);
-          analysis = ColumnAnalysis.error(StringUtils.format("unknown_type_%s", type));
+      if (capabilities == null) {
+        log.warn("Unknown column type for column[%s]", columnName);
+        columns.put(columnName, ColumnAnalysis.error("unknown_type"));
+        continue;
+      }
+
+      ColumnAnalysis analysis;
+      try {
+        switch (capabilities.getType()) {
+          case LONG:
+            final int bytesPerRow =
+                ColumnHolder.TIME_COLUMN_NAME.equals(columnName) ? NUM_BYTES_IN_TIMESTAMP : Long.BYTES;
+
+            analysis = analyzeNumericColumn(capabilities, numRows, bytesPerRow);
+            break;
+          case FLOAT:
+            analysis = analyzeNumericColumn(capabilities, numRows, NUM_BYTES_IN_TEXT_FLOAT);
+            break;
+          case DOUBLE:
+            analysis = analyzeNumericColumn(capabilities, numRows, Double.BYTES);
+            break;
+          case STRING:
+            if (index != null) {
+              analysis = analyzeStringColumn(capabilities, index.getColumnHolder(columnName));
+            } else {
+              analysis = analyzeStringColumn(capabilities, storageAdapter, columnName);
+            }
+            break;
+          case ARRAY:
+            analysis = analyzeArrayColumn(capabilities);
+            break;
+          case COMPLEX:
+            final ColumnHolder columnHolder = index != null ? index.getColumnHolder(columnName) : null;
+            analysis = analyzeComplexColumn(capabilities, numRows, columnHolder);
+            break;
+          default:
+            log.warn("Unknown column type[%s] for column[%s].", capabilities.asTypeString(), columnName);
+            analysis = ColumnAnalysis.error(StringUtils.format("unknown_type_%s", capabilities.asTypeString()));
+        }
+      }
+      catch (RuntimeException re) {
+        // eat the exception and add error analysis, this is preferrable to exploding since exploding results in
+        // the broker downstream SQL metadata cache left in a state where it is unable to completely finish
+        // the SQL schema relies on this stuff functioning, and so will continuously retry when it faces a failure
+        log.warn(re, "Error analyzing column[%s] of type[%s]", columnName, capabilities.asTypeString());
+        analysis = ColumnAnalysis.error(re.getMessage());
       }
 
       columns.put(columnName, analysis);
     }
-
-    // Add time column too
-    ColumnCapabilities timeCapabilities = adapterCapabilitesFn.apply(ColumnHolder.TIME_COLUMN_NAME);
-    if (timeCapabilities == null) {
-      timeCapabilities = ColumnCapabilitiesImpl.createSimpleNumericColumnCapabilities(ValueType.LONG);
-    }
-    columns.put(
-        ColumnHolder.TIME_COLUMN_NAME,
-        analyzeNumericColumn(timeCapabilities, length, NUM_BYTES_IN_TIMESTAMP)
-    );
 
     return columns;
   }
@@ -183,25 +188,16 @@ public class SegmentAnalyzer
   )
   {
     long size = 0;
+    final ColumnAnalysis.Builder bob = ColumnAnalysis.builder().withCapabilities(capabilities);
 
     if (analyzingSize()) {
       if (capabilities.hasMultipleValues().isTrue()) {
-        return ColumnAnalysis.error("multi_value");
+        return bob.withErrorMessage("multi_value").build();
       }
 
       size = ((long) length) * sizePerRow;
     }
-
-    return new ColumnAnalysis(
-        capabilities.getType().name(),
-        capabilities.hasMultipleValues().isTrue(),
-        capabilities.hasNulls().isMaybeTrue(), // if we don't know for sure, then we should plan to check for nulls
-        size,
-        null,
-        null,
-        null,
-        null
-    );
+    return bob.withSize(size).build();
   }
 
   private ColumnAnalysis analyzeStringColumn(
@@ -213,51 +209,52 @@ public class SegmentAnalyzer
     Comparable max = null;
     long size = 0;
     final int cardinality;
-    if (capabilities.hasBitmapIndexes()) {
-      final BitmapIndex bitmapIndex = columnHolder.getBitmapIndex();
-      cardinality = bitmapIndex.getCardinality();
-
+    final ColumnIndexSupplier indexSupplier = columnHolder.getIndexSupplier();
+    final DictionaryEncodedStringValueIndex valueIndex =
+        indexSupplier == null ? null : indexSupplier.as(DictionaryEncodedStringValueIndex.class);
+    if (valueIndex != null) {
+      cardinality = valueIndex.getCardinality();
       if (analyzingSize()) {
         for (int i = 0; i < cardinality; ++i) {
-          String value = bitmapIndex.getValue(i);
+          String value = valueIndex.getValue(i);
           if (value != null) {
-            size += StringUtils.estimatedBinaryLengthAsUTF8(value) *
-                    ((long) bitmapIndex.getBitmap(bitmapIndex.getIndex(value)).size());
+            size += StringUtils.estimatedBinaryLengthAsUTF8(value) * ((long) valueIndex.getBitmap(i).size());
           }
         }
       }
-
       if (analyzingMinMax() && cardinality > 0) {
-        min = NullHandling.nullToEmptyIfNeeded(bitmapIndex.getValue(0));
-        max = NullHandling.nullToEmptyIfNeeded(bitmapIndex.getValue(cardinality - 1));
+        min = NullHandling.nullToEmptyIfNeeded(valueIndex.getValue(0));
+        max = NullHandling.nullToEmptyIfNeeded(valueIndex.getValue(cardinality - 1));
       }
     } else if (capabilities.isDictionaryEncoded().isTrue()) {
       // fallback if no bitmap index
       try (BaseColumn column = columnHolder.getColumn()) {
-        DictionaryEncodedColumn<String> theColumn = (DictionaryEncodedColumn<String>) column;
-        cardinality = theColumn.getCardinality();
-        if (analyzingMinMax() && cardinality > 0) {
-          min = NullHandling.nullToEmptyIfNeeded(theColumn.lookupName(0));
-          max = NullHandling.nullToEmptyIfNeeded(theColumn.lookupName(cardinality - 1));
+        if (column instanceof DictionaryEncodedColumn) {
+          DictionaryEncodedColumn<String> theColumn = (DictionaryEncodedColumn<String>) column;
+          cardinality = theColumn.getCardinality();
+          if (analyzingMinMax() && cardinality > 0) {
+            min = NullHandling.nullToEmptyIfNeeded(theColumn.lookupName(0));
+            max = NullHandling.nullToEmptyIfNeeded(theColumn.lookupName(cardinality - 1));
+          }
+        } else {
+          cardinality = 0;
         }
       }
       catch (IOException e) {
-        throw new RuntimeException(e);
+        return ColumnAnalysis.builder().withCapabilities(capabilities).withErrorMessage(e.getMessage()).build();
       }
     } else {
       cardinality = 0;
     }
 
-    return new ColumnAnalysis(
-        capabilities.getType().name(),
-        capabilities.hasMultipleValues().isTrue(),
-        capabilities.hasNulls().isMaybeTrue(), // if we don't know for sure, then we should plan to check for nulls
-        size,
-        analyzingCardinality() ? cardinality : 0,
-        min,
-        max,
-        null
-    );
+    return ColumnAnalysis.builder()
+                         .withCapabilities(capabilities)
+                         .withSize(size)
+                         .withCardinality(analyzingCardinality() ? cardinality : 0)
+                         .withMinValue(min)
+                         .withMaxValue(max)
+                         .build();
+
   }
 
   private ColumnAnalysis analyzeStringColumn(
@@ -326,56 +323,69 @@ public class SegmentAnalyzer
       max = storageAdapter.getMaxValue(columnName);
     }
 
-    return new ColumnAnalysis(
-        capabilities.getType().name(),
-        capabilities.hasMultipleValues().isTrue(),
-        capabilities.hasNulls().isMaybeTrue(), // if we don't know for sure, then we should plan to check for nulls
-        size,
-        cardinality,
-        min,
-        max,
-        null
-    );
+    return ColumnAnalysis.builder()
+                         .withCapabilities(capabilities)
+                         .withSize(size)
+                         .withCardinality(cardinality)
+                         .withMinValue(min)
+                         .withMaxValue(max)
+                         .build();
   }
 
   private ColumnAnalysis analyzeComplexColumn(
-      @Nullable final ColumnCapabilities capabilities,
-      @Nullable final ColumnHolder columnHolder,
-      final String typeName
+      final ColumnCapabilities capabilities,
+      final int numCells,
+      @Nullable final ColumnHolder columnHolder
   )
   {
-    try (final ComplexColumn complexColumn = columnHolder != null ? (ComplexColumn) columnHolder.getColumn() : null) {
-      final boolean hasMultipleValues = capabilities != null && capabilities.hasMultipleValues().isTrue();
-      final boolean hasNulls = capabilities != null && capabilities.hasNulls().isMaybeTrue();
-      long size = 0;
+    final TypeSignature<ValueType> typeSignature = capabilities == null ? ColumnType.UNKNOWN_COMPLEX : capabilities;
+    final String typeName = typeSignature.getComplexTypeName();
 
+    final ColumnAnalysis.Builder bob = ColumnAnalysis.builder()
+                                                     .withType(ColumnTypeFactory.ofType(typeSignature))
+                                                     .withTypeName(typeName);
+
+    try (final BaseColumn theColumn = columnHolder != null ? columnHolder.getColumn() : null) {
+      if (theColumn != null && !(theColumn instanceof ComplexColumn)) {
+        return bob.withErrorMessage(
+                    StringUtils.format(
+                        "[%s] is not a [%s]",
+                        theColumn.getClass().getName(),
+                        ComplexColumn.class.getName()
+                    )
+                  )
+                  .build();
+      }
+      final ComplexColumn complexColumn = (ComplexColumn) theColumn;
+
+      bob.hasMultipleValues(capabilities.hasMultipleValues().isTrue())
+         .hasNulls(capabilities.hasNulls().isMaybeTrue());
+
+      long size = 0;
       if (analyzingSize() && complexColumn != null) {
-        final ComplexMetricSerde serde = ComplexMetrics.getSerdeForType(typeName);
+
+        final ComplexMetricSerde serde = typeName == null ? null : ComplexMetrics.getSerdeForType(typeName);
         if (serde == null) {
-          return ColumnAnalysis.error(StringUtils.format("unknown_complex_%s", typeName));
+          return bob.withErrorMessage(StringUtils.format("unknown_complex_%s", typeName)).build();
         }
 
         final Function<Object, Long> inputSizeFn = serde.inputSizeFn();
-        if (inputSizeFn == null) {
-          return new ColumnAnalysis(typeName, hasMultipleValues, hasNulls, 0, null, null, null, null);
-        }
+        if (inputSizeFn != null) {
 
-        final int length = complexColumn.getLength();
-        for (int i = 0; i < length; ++i) {
-          size += inputSizeFn.apply(complexColumn.getRowValue(i));
+          for (int i = 0; i < numCells; ++i) {
+            size += inputSizeFn.apply(complexColumn.getRowValue(i));
+          }
         }
       }
-
-      return new ColumnAnalysis(
-          typeName,
-          hasMultipleValues,
-          hasNulls,
-          size,
-          null,
-          null,
-          null,
-          null
-      );
+      return bob.withSize(size).build();
     }
+    catch (IOException e) {
+      return bob.withErrorMessage(e.getMessage()).build();
+    }
+  }
+
+  private ColumnAnalysis analyzeArrayColumn(final ColumnCapabilities capabilities)
+  {
+    return ColumnAnalysis.builder().withCapabilities(capabilities).build();
   }
 }
