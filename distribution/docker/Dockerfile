@@ -94,4 +94,6 @@ USER druid
 VOLUME /opt/druid/var
 WORKDIR /opt/druid
 
+RUN cp extensions/druid-lookups-cached-global/postgresql-42.4.1.jar lib/
+
 ENTRYPOINT ["/druid.sh"]
